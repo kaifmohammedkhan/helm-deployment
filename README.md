@@ -13,22 +13,63 @@ Automating Kubernetes deployments using Helm charts. Managing releases, template
 # 🛠 Deployment Strategy
 
 # Step 1: Cluster Creation
-Created a multi-node Kind cluster using `kind-node.yaml`, defining one control-plane and three worker nodes.
+
+A multi‑node Kind cluster was created using `kind-node.yaml` configuration. The config defined one control‑plane and three worker nodes, with custom networking subnets:
+
+`kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: false
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/12"`
+`nodes:`
+  `- role: control-plane`
+  `- role: worker`
+  `- role: worker`
+  `- role: worker`
+  
+Cluster creation was triggered with:
+
+`kind.exe create cluster --name kind-node \
+  --config kind-node.yaml \
+  --image kindest/node:v1.27.3`
+
+Observation: Initially, all nodes appeared in `NotReady` state. Within ~1 minute, they transitioned to `Ready`, confirming a healthy 4‑node cluster.
+
 <div align="center">
 <img src="images/helm/S1 HELM/helm1.1.png" width="250"/>
 <img src="images/helm/S1 HELM/helm1.2.png" width="250"/>
 </div>
 
 # Step 2: Chart Creation & Structure
-Initialized the Helm workflow by creating a dedicated directory structure and executing `helm create resumematcher`.
+
+Initiated the Helm workflow by creating a dedicated directory structure for the application. Executed the following commands to set up the workspace:
+
+`mkdir -p helmrepository/resumematcher`
+`cd helmrepository`
+`helm create resumematcher`
+
+The `helm create` command generated the standard scaffolding required for Kubernetes packaging, including the `templates/` directory for manifest files, `Chart.yaml` for metadata, and `values.yaml` for default configuration parameters.
+
 <div align="center">
 <img src="images/helm/S2 HELM/helm2.1.png" width="250"/>
 <img src="images/helm/S2 HELM/helm2.2.png" width="250"/>
 <img src="images/helm/S2 HELM/helm2.3.png" width="250"/>
 </div>
 
-# Step 3: Template Customization
-Refined the `templates/` directory and utilized `values.yaml` and `values.override.yaml` for modular configuration.
+# Step 3: Template Customization.
+
+Customized the Helm chart by refining the `templates/` directory. This involved defining core Kubernetes manifests—such as `deployment.yaml`, `service.yaml`, and persistent volume claims—to ensure modular and reusable infrastructure as code.
+
+Configuration Management
+Used `values.yaml` to parameterize the deployment, allowing for flexible configuration of replicas, image tags, and resource requests. To maintain clean overrides, a `values.override.yaml` file was implemented for environment-specific settings:
+
+`# values.override.yaml provides specific environment configurations`
+`# to maintain clean base manifests in values.yaml`
+
+Database Initialization
+Configured a ConfigMap within the Helm values to automate database initialization. This includes a robust `initSql` block that ensures the necessary `PostgreSQL` extensions (like pgvector) are enabled and required tables are created if they do not exist, including logic for safe schema updates and data integrity via SQL rules.
+
 <div align="center">
 <img src="images/helm/S3 HELM/helm3.1.png" width="250"/>
 <img src="images/helm/S3 HELM/helm3.2.png" width="250"/>
@@ -39,7 +80,15 @@ Refined the `templates/` directory and utilized `values.yaml` and `values.overri
 </div>
 
 # Step 4: Release Management
-Packaged the Helm chart, generated repository metadata, and utilized `git subtree` to isolate the `helmrepo-branch`.
+
+The final phase involved packaging the Helm chart into a distributable format and automating its hosting. Key technical steps included:
+
+- Packaging: Used helm `package resumematcher` to compile the chart into a `.tgz` artifact.
+- Indexing: Executed `helm repo` index to generate the necessary repository metadata, pointing to my GitHub Pages URL.
+- Repository Isolation: Utilized `git subtree split` to create a separate `helmrepo-branch`. This ensured that the Helm repository remained clean and separated from the main application codebase.
+- Deployment: Pushed the isolated branch to a dedicated repository and configured GitHub Pages. The site is now live, with the build process automatically managed by GitHub’s Pages deployment workflow.
+
+
 <div align="center">
 <img src="images/helm/S4 HELM/helm4.1.png" width="250"/>
 <img src="images/helm/S4 HELM/helm4.2.png" width="250"/>
@@ -53,8 +102,35 @@ Packaged the Helm chart, generated repository metadata, and utilized `git subtre
 </div>
 
 # Step 5: Advanced Configuration & Deployment Verification
-Resolved GHCR image-pull issues with Kubernetes secrets, verified connectivity via port-forwarding, and confirmed deployment via logs.
-<div align="center">
+
+The deployment phase identified a critical dependency: the application images were hosted in a private GitHub Container Registry (GHCR). Initially, pods remained in a Pending state due to authorization errors during the image pull process.
+
+Authentication & Private Registry Access
+
+- GHCR Authentication: To resolve the image pull failure, I authenticated the Docker client with the GitHub Container Registry using the CLI:
+`docker login ghcr.io -u [USERNAME] -p [GITHUB_TOKEN]`
+
+- Secret Creation: To allow Kubernetes to pull images from the private registry, I created a registry secret within the cluster:
+`kubectl create secret docker-registry ghcr-secret \`
+  `--docker-server=ghcr.io \
+  --docker-username=[USERNAME] \
+  --docker-password=[GITHUB_TOKEN]`
+  
+This secret was then referenced in the `values.yaml` file under `imagePullSecrets`, enabling the pods to transition from `Pending` to `Running` status.
+
+Functional Testing & Validation
+
+- Service Access: With the images successfully pulled, I utilized port-forwarding to bridge the local environment to the cluster service:
+`kubectl port-forward svc/resumematcher-service 8080:3000`
+
+- End-to-End Testing: I conducted a live test by uploading a resume to the application interface. The application successfully triggered the embedding logic and performed a semantic match against the PostgreSQL database.
+
+- Log-Based Confirmation: The successful operation was verified via the container logs:
+`kubectl logs -f [pod-name]`
+
+The logs provided definitive proof of the system's operational status: the connection to `resumematcher-db` was verified, table schemas were confirmed as initialized, and successful HTTP 200 responses for `/api/resumes` requests confirmed that the complete Helm-managed architecture was fully functional.
+
+By addressing the private registry authentication and verifying the runtime logs, I ensured that the Helm-based infrastructure is not only automated but also secure and production-ready.<div align="center">
 <img src="images/helm/S5 HELM/helm5.1.png" width="250"/>
 <img src="images/helm/S5 HELM/helm5.2.png" width="250"/>
 <img src="images/helm/S5 HELM/helm5.3.png" width="250"/>
