@@ -13,7 +13,7 @@ Automating Kubernetes deployments using Helm charts. Managing releases, template
 # 🛠 Deployment Strategy
 
 <div align="center">
-<img src="images/helm/helm.gif" width="250"/>
+<img src="images/helm/helm.gif" width="1000"/>
 </div>
 
 # Step 1: Cluster Creation
