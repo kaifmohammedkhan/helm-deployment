@@ -12,6 +12,10 @@ Automating Kubernetes deployments using Helm charts. Managing releases, template
 
 # 🛠 Deployment Strategy
 
+<div align="center">
+<img src="images/helm/helm.gif" width="250"/>
+</div>
+
 # Step 1: Cluster Creation
 
 A multi‑node Kind cluster was created using `kind-node.yaml` configuration. The config defined one control‑plane and three worker nodes, with custom networking subnets:
